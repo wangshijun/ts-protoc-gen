@@ -55,9 +55,11 @@ function jsGetterName(name: string): string {
 
 function getTsTypeName(type: number, name: string): string {
   let result = name;
-  if (name.split("_").length === 1) {
+  if (name.startsWith("google_protobuf_") === false) {
     if (type === MESSAGE_TYPE) {
-      result = `T${name}`;
+      const tmp = name.split(".");
+      tmp[tmp.length - 1] = `T${tmp[tmp.length - 1]}`;
+      result = tmp.join(".");
     }
   }
   return result;
