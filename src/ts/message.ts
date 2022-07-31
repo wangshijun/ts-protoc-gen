@@ -7,14 +7,14 @@ import {
   stripPrefix,
   throwError,
   uppercaseFirst,
-  withinNamespaceFromExportEntry
+  withinNamespaceFromExportEntry,
 } from "../util";
 import { ExportMap } from "../ExportMap";
 import {
   DescriptorProto,
   FieldDescriptorProto,
   FieldOptions,
-  FileDescriptorProto
+  FileDescriptorProto,
 } from "google-protobuf/google/protobuf/descriptor_pb";
 import { BYTES_TYPE, ENUM_TYPE, getFieldType, getTypeName, MESSAGE_TYPE } from "./FieldTypes";
 import { Printer } from "../Printer";
@@ -53,7 +53,23 @@ function jsGetterName(name: string): string {
   return name === "Extension" || name === "JsPbMessageId" ? name + "$" : name;
 }
 
-export function printMessage(fileName: string, exportMap: ExportMap, messageDescriptor: DescriptorProto, indentLevel: number, fileDescriptor: FileDescriptorProto) {
+function getTsTypeName(type: number, name: string): string {
+  let result = name;
+  if (name.split("_").length === 1) {
+    if (type === MESSAGE_TYPE) {
+      result = `T${name}`;
+    }
+  }
+  return result;
+}
+
+export function printMessage(
+  fileName: string,
+  exportMap: ExportMap,
+  messageDescriptor: DescriptorProto,
+  indentLevel: number,
+  fileDescriptor: FileDescriptorProto
+) {
   const messageName = messageDescriptor.getName();
   const messageOptions = messageDescriptor.getOptions();
   if (messageOptions !== undefined && messageOptions.getMapEntry()) {
@@ -61,8 +77,8 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
     return "";
   }
 
-  const objectTypeName = `AsObject`;
-  const toObjectType = new Printer(indentLevel + 1);
+  const objectTypeName = `T${messageName}`;
+  const toObjectType = new Printer(indentLevel);
   toObjectType.printLn(`export type ${objectTypeName} = {`);
 
   const printer = new Printer(indentLevel);
@@ -72,7 +88,7 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
   const oneOfGroups: Array<Array<FieldDescriptorProto>> = [];
   const syntheticOneOfGroups: boolean[] = [];
 
-  messageDescriptor.getFieldList().forEach(field => {
+  messageDescriptor.getFieldList().forEach((field) => {
     if (field.hasOneofIndex()) {
       const oneOfIndex = field.getOneofIndex();
       if (oneOfIndex === undefined) {
@@ -96,7 +112,8 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
 
     let exportType;
     if (type === MESSAGE_TYPE) {
-      const fieldTypeName = field.getTypeName() || throwError(`Missing field type name for message field: ${fieldName}`);
+      const fieldTypeName =
+        field.getTypeName() || throwError(`Missing field type name for message field: ${fieldName}`);
       const fullTypeName = fieldTypeName.slice(1);
       const fieldMessageType = exportMap.getMessage(fullTypeName);
       if (fieldMessageType === undefined) {
@@ -118,7 +135,9 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
         }
         printer.printIndentedLn(`get${withUppercase}Map(): jspb.Map<${keyTypeName}, ${valueTypeName}>;`);
         printer.printIndentedLn(`clear${withUppercase}Map(): void;`);
-        toObjectType.printIndentedLn(`${camelCaseName}Map: Array<[${keyTypeName}${keyType === MESSAGE_TYPE ? ".AsObject" : ""}, ${valueTypeName}${valueType === MESSAGE_TYPE ? ".AsObject" : ""}]>,`);
+        toObjectType.printIndentedLn(
+          `${camelCaseName}Map: Array<[${getTsTypeName(keyType, keyTypeName)}, ${getTsTypeName( valueType, valueTypeName)}]>,`
+        );
         return;
       }
       const withinNamespace = withinNamespaceFromExportEntry(fullTypeName, fieldMessageType);
@@ -128,7 +147,8 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
         exportType = filePathToPseudoNamespace(fieldMessageType.fileName) + "." + withinNamespace;
       }
     } else if (type === ENUM_TYPE) {
-      const fieldTypeName = field.getTypeName() || throwError(`Missing field type name for message field: ${fieldName}`);
+      const fieldTypeName =
+        field.getTypeName() || throwError(`Missing field type name for message field: ${fieldName}`);
       const fullTypeName = fieldTypeName.slice(1);
       const fieldEnumType = exportMap.getEnum(fullTypeName);
       if (fieldEnumType === undefined) {
@@ -163,7 +183,11 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
     function printClearIfNotPresent() {
       if (!hasClearMethod) {
         hasClearMethod = true;
-        printer.printIndentedLn(`clear${jsGetterName(withUppercase)}${field.getLabel() === FieldDescriptorProto.Label.LABEL_REPEATED ? "List" : ""}(): void;`);
+        printer.printIndentedLn(
+          `clear${jsGetterName(withUppercase)}${
+            field.getLabel() === FieldDescriptorProto.Label.LABEL_REPEATED ? "List" : ""
+          }(): void;`
+        );
       }
     }
 
@@ -174,22 +198,25 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
 
     function printRepeatedAddMethod(valueType: string) {
       const optionalValue = field.getType() === MESSAGE_TYPE;
-      printer.printIndentedLn(`add${withUppercase}(value${optionalValue ? "?" : ""}: ${valueType}, index?: number): ${valueType};`);
+      printer.printIndentedLn(
+        `add${withUppercase}(value${optionalValue ? "?" : ""}: ${valueType}, index?: number): ${valueType};`
+      );
     }
 
-    if (field.getLabel() === FieldDescriptorProto.Label.LABEL_REPEATED) {// is repeated
+    if (field.getLabel() === FieldDescriptorProto.Label.LABEL_REPEATED) {
+      // is repeated
       printClearIfNotPresent();
       if (type === BYTES_TYPE) {
-        toObjectType.printIndentedLn(`${camelCaseName}List: Array<Uint8Array | string>,`);
+        toObjectType.printIndentedLn(`${camelCaseName}: Array<Uint8Array | string>,`);
         printer.printIndentedLn(`get${withUppercase}List(): Array<Uint8Array | string>;`);
         printer.printIndentedLn(`get${withUppercase}List_asU8(): Array<Uint8Array>;`);
         printer.printIndentedLn(`get${withUppercase}List_asB64(): Array<string>;`);
         printer.printIndentedLn(`set${withUppercase}List(value: Array<Uint8Array | string>): void;`);
         printRepeatedAddMethod("Uint8Array | string");
       } else {
-        toObjectType.printIndentedLn(`${camelCaseName}List: Array<${exportType}${type === MESSAGE_TYPE ? ".AsObject" : ""}>,`);
-        printer.printIndentedLn(`get${withUppercase}List(): Array<${exportType}>;`);
-        printer.printIndentedLn(`set${withUppercase}List(value: Array<${exportType}>): void;`);
+        toObjectType.printIndentedLn(`${camelCaseName}: Array<${getTsTypeName(type, exportType)}>,`);
+        printer.printIndentedLn(`get${withUppercase}List(): Array<${getTsTypeName(type, exportType)}>;`);
+        printer.printIndentedLn(`set${withUppercase}List(value: Array<${getTsTypeName(type, exportType)}>): void;`);
         printRepeatedAddMethod(exportType);
       }
     } else {
@@ -203,8 +230,8 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
         let fieldObjectType = exportType;
         let canBeUndefined = false;
         if (type === MESSAGE_TYPE) {
-          fieldObjectType += ".AsObject";
-          if (!isProto2(fileDescriptor) || (field.getLabel() === FieldDescriptorProto.Label.LABEL_OPTIONAL)) {
+          fieldObjectType = getTsTypeName(type, exportType);
+          if (!isProto2(fileDescriptor) || field.getLabel() === FieldDescriptorProto.Label.LABEL_OPTIONAL) {
             canBeUndefined = true;
           }
         } else {
@@ -214,8 +241,12 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
         }
         const fieldObjectName = normaliseFieldObjectName(camelCaseName);
         toObjectType.printIndentedLn(`${fieldObjectName}${canBeUndefined ? "?" : ""}: ${fieldObjectType},`);
-        printer.printIndentedLn(`get${jsGetterName(withUppercase)}(): ${exportType}${canBeUndefined ? " | undefined" : ""};`);
-        printer.printIndentedLn(`set${jsGetterName(withUppercase)}(value${type === MESSAGE_TYPE ? "?" : ""}: ${exportType}): void;`);
+        printer.printIndentedLn(
+          `get${jsGetterName(withUppercase)}(): ${fieldObjectType}${canBeUndefined ? " | undefined" : ""};`
+        );
+        printer.printIndentedLn(
+          `set${jsGetterName(withUppercase)}(value${type === MESSAGE_TYPE ? "?" : ""}: ${fieldObjectType}): void;`
+        );
       }
     }
     printer.printEmptyLn();
@@ -232,29 +263,29 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
   });
 
   printer.printIndentedLn(`serializeBinary(): Uint8Array;`);
-  printer.printIndentedLn(`toObject(includeInstance?: boolean): ${messageName}.${objectTypeName};`);
-  printer.printIndentedLn(`static toObject(includeInstance: boolean, msg: ${messageName}): ${messageName}.${objectTypeName};`);
+  printer.printIndentedLn(`toObject(includeInstance?: boolean): ${objectTypeName};`);
+  printer.printIndentedLn(`static toObject(includeInstance: boolean, msg: ${messageName}): ${objectTypeName};`);
   printer.printIndentedLn(`static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};`);
   printer.printIndentedLn(`static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};`);
   printer.printIndentedLn(`static serializeBinaryToWriter(message: ${messageName}, writer: jspb.BinaryWriter): void;`);
   printer.printIndentedLn(`static deserializeBinary(bytes: Uint8Array): ${messageName};`);
-  printer.printIndentedLn(`static deserializeBinaryFromReader(message: ${messageName}, reader: jspb.BinaryReader): ${messageName};`);
+  printer.printIndentedLn(
+    `static deserializeBinaryFromReader(message: ${messageName}, reader: jspb.BinaryReader): ${messageName};`
+  );
 
   printer.printLn(`}`);
   printer.printEmptyLn();
 
-  printer.printLn(`export namespace ${messageName} {`);
-
   printer.print(toObjectType.getOutput());
 
-  messageDescriptor.getNestedTypeList().forEach(nested => {
+  messageDescriptor.getNestedTypeList().forEach((nested) => {
     const msgOutput = printMessage(fileName, exportMap, nested, indentLevel + 1, fileDescriptor);
     if (msgOutput !== "") {
       // If the message class is a Map entry then it isn't output, so don't print the namespace block
       printer.print(msgOutput);
     }
   });
-  messageDescriptor.getEnumTypeList().forEach(enumType => {
+  messageDescriptor.getEnumTypeList().forEach((enumType) => {
     printer.print(`${printEnum(enumType, indentLevel + 1)}`);
   });
   messageDescriptor.getOneofDeclList().forEach((oneOfDecl, index) => {
@@ -263,11 +294,9 @@ export function printMessage(fileName: string, exportMap: ExportMap, messageDesc
       printer.print(`${printOneOfDecl(oneOfDecl, oneOfGroups[index] || [], indentLevel + 1)}`);
     }
   });
-  messageDescriptor.getExtensionList().forEach(extension => {
+  messageDescriptor.getExtensionList().forEach((extension) => {
     printer.print(printExtension(fileName, exportMap, extension, indentLevel + 1));
   });
-
-  printer.printLn(`}`);
 
   return printer.getOutput();
 }

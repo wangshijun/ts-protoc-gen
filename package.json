@@ -1,6 +1,9 @@
 {
-  "name": "ts-protoc-gen",
-  "version": "0.15.1-pre",
+  "name": "@wangshijun/ts-protoc-gen",
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "0.16.1",
   "description": "Protoc Plugin for TypeScript Declarations and Service Definitions",
   "scripts": {
     "lint": "tslint -c tslint.json \"test/**/*.ts\" \"src/**/*.ts\"",
@@ -27,6 +30,7 @@
     "service",
     "proto3"
   ],
+  "files": ["lib"],
   "author": "Improbable",
   "license": "Apache-2.0",
   "dependencies": {
@@ -44,8 +48,6 @@
     "chai": "^3.5.0",
     "download-cli": "^1.1.1",
     "glob": "^7.1.4",
-    "grpc": "^1.24.6",
-    "grpc-tools": "^1.11.1",
     "lodash": "^4.17.5",
     "lodash.isequal": "^4.5.0",
     "mocha": "^5.2.0",
